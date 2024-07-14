@@ -131,6 +131,17 @@ install(TARGETS DoubleIntegratorPyBindings
 ## Testing ##
 #############
 
+#glog sudo apt-get install libgflags-dev libgoogle-glog-dev
+set(glog_INCLUDE_DIRS "/usr/include")
+set(glog_LIBRARY_DIRS "/usr/lib/x86_64-linux-gnu")
+set(glog_LIBS "glog")
+# 编译: catkin build ocs2_double_integrator
+# 运行: ./devel/lib/ocs2_double_integrator/ocs2_double_integrator_demo
+add_executable(${PROJECT_NAME}_demo test/DoubleIntegratorDemo.cpp)
+add_dependencies(${PROJECT_NAME}_demo ${catkin_EXPORTED_TARGETS})
+target_include_directories(${PROJECT_NAME}_demo PRIVATE ${PROJECT_BINARY_DIR}/include ${glog_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME}_demo ${PROJECT_NAME} ${catkin_LIBRARIES} ${glog_LIBS})
+
 catkin_add_gtest(ocs2_double_integrator_no_ros_integration_test
   test/DoubleIntegratorNoRosIntegrationTest.cpp
 )

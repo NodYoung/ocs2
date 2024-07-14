@@ -73,20 +73,20 @@ struct CartPoleParameters {
     }
   }
 
-  scalar_t cartMass_ = 1.0;       // [kg]
-  scalar_t poleMass_ = 1.0;       // [kg]
-  scalar_t poleLength_ = 1.0;     // [m]
-  scalar_t maxInput_ = 6.0;       // [N]
-  scalar_t gravity_ = 9.8;        // [m/s^2]
-  scalar_t poleHalfLength_ = -1;  // [m]
-  scalar_t poleMoi_ = -1;         // [kg*m^2]
-  scalar_t poleSteinerMoi_ = -1;  // [kg*m^2]
+  scalar_t cartMass_ = 1.0;       // [kg] 滑块质量
+  scalar_t poleMass_ = 1.0;       // [kg] 连杆质量
+  scalar_t poleLength_ = 1.0;     // [m]  连杆长
+  scalar_t maxInput_ = 6.0;       // [N]  滑块输入
+  scalar_t gravity_ = 9.8;        // [m/s^2]  重力加速度
+  scalar_t poleHalfLength_ = -1;  // [m]  
+  scalar_t poleMoi_ = -1;         // [kg*m^2] 细杆过质心的转动惯量
+  scalar_t poleSteinerMoi_ = -1;  // [kg*m^2] 细杆过端点的转动惯量
 
  private:
   void computeInertiaTerms() {
     poleHalfLength_ = poleLength_ / 2.0;
     poleMoi_ = 1.0 / 12.0 * poleMass_ * (poleLength_ * poleLength_);
-    poleSteinerMoi_ = poleMoi_ + poleMass_ * (poleHalfLength_ * poleHalfLength_);
+    poleSteinerMoi_ = poleMoi_ + poleMass_ * (poleHalfLength_ * poleHalfLength_); /// 平行轴定理
   }
 };
 

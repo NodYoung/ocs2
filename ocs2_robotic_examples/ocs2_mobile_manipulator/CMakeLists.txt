@@ -133,6 +133,17 @@ install(DIRECTORY config
 ## Testing ##
 #############
 
+#glog sudo apt-get install libgflags-dev libgoogle-glog-dev
+set(glog_INCLUDE_DIRS "/usr/include")
+set(glog_LIBRARY_DIRS "/usr/lib/x86_64-linux-gnu")
+set(glog_LIBS "glog")
+# 编译: catkin build ocs2_mobile_manipulator
+# 运行: ./devel/lib/ocs2_mobile_manipulator/ocs2_mobile_manipulator_demo
+add_executable(${PROJECT_NAME}_demo test/MobileManipulatorDemo.cpp)
+add_dependencies(${PROJECT_NAME}_demo ${catkin_EXPORTED_TARGETS})
+target_include_directories(${PROJECT_NAME}_demo PRIVATE ${PROJECT_BINARY_DIR}/include ${glog_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME}_demo ${PROJECT_NAME} ${catkin_LIBRARIES} ${glog_LIBS})
+
 # Helper macro for adding target applications
 macro(add_ocs2_test APP_NAME APP_SRC)
   catkin_add_gtest(${APP_NAME}
