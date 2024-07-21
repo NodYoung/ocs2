@@ -7,80 +7,51 @@
 #include <ocs2_ddp/GaussNewtonDDP_MPC.h>
 #include <ocs2_mpc/MPC_MRT_Interface.h>
 
-class DoubleIntegrator {
-public:
-  DoubleIntegrator() {
-    const bool verbose = true;
-    const std::string taskFile = ocs2::double_integrator::getPath() + "/config/mpc/task.info";
-    const std::string libFolder = ocs2::double_integrator::getPath() + "/auto_generated";
-    doubleIntegratorInterfacePtr.reset(new ocs2::double_integrator::DoubleIntegratorInterface(taskFile, libFolder, verbose));
 
-    initState = doubleIntegratorInterfacePtr->getInitialState();
-    goalState = doubleIntegratorInterfacePtr->getInitialTarget();
-    LOG(INFO) << "initState = " << initState.transpose() << ", goalState = " << goalState.transpose();
+int DoubleIntegratorIntegrationTestSynchronousTracking(bool warm_start=true) {
+  const std::string task_file = ocs2::double_integrator::getPath() + "/config/mpc/task.info";
+  const std::string lib_folder = ocs2::double_integrator::getPath() + "/auto_generated";
+  ocs2::double_integrator::DoubleIntegratorInterface double_integrator_interface(task_file, lib_folder, true);
+  LOG(INFO) << "init_state = " << double_integrator_interface.getInitialState().transpose() << ", goal_state = " << double_integrator_interface.getInitialTarget().transpose();
 
-    // initialize reference
-    ocs2::TargetTrajectories targetTrajectories({initTime}, {goalState}, {ocs2::vector_t::Zero(ocs2::double_integrator::INPUT_DIM)});
-    LOG(INFO) << "targetTrajectories:\n" << targetTrajectories;
-    doubleIntegratorInterfacePtr->getReferenceManagerPtr()->setTargetTrajectories(std::move(targetTrajectories));
+  const ocs2::scalar_t init_time(1234.5), final_time(1234.5+5.0);  // start from a random time
+  ocs2::TargetTrajectories target_trajectories({init_time}, {double_integrator_interface.getInitialTarget()}, {ocs2::vector_t::Zero(ocs2::double_integrator::INPUT_DIM)}); // initialize reference
+  LOG(INFO) << "target_trajectories:\n" << target_trajectories;
+  double_integrator_interface.getReferenceManagerPtr()->setTargetTrajectories(std::move(target_trajectories));
+
+  if (!warm_start) {
+    double_integrator_interface.mpcSettings().coldStart_ = true;
+    double_integrator_interface.ddpSettings().maxNumIterations_ = 5;
   }
-
-  std::unique_ptr<ocs2::GaussNewtonDDP_MPC> getMpc(bool warmStart) {
-    auto& interface = *doubleIntegratorInterfacePtr;
-    auto mpcSettings = interface.mpcSettings();
-    auto ddpSettings = interface.ddpSettings();
-    if (!warmStart) {
-      mpcSettings.coldStart_ = true;
-      ddpSettings.maxNumIterations_ = 5;
-    }
-
-    auto mpcPtr = std::make_unique<ocs2::GaussNewtonDDP_MPC>(std::move(mpcSettings), std::move(ddpSettings), interface.getRollout(),
-                                                       interface.getOptimalControlProblem(), interface.getInitializer());
-    mpcPtr->getSolverPtr()->setReferenceManager(interface.getReferenceManagerPtr());
-
-    return mpcPtr;
-  }
-
-  const ocs2::scalar_t tolerance = 2e-2;
-  const ocs2::scalar_t f_mpc = 10.0;
-  const ocs2::scalar_t initTime = 1234.5;  // start from a random time
-  const ocs2::scalar_t finalTime = initTime + 5.0;
-
-  ocs2::vector_t initState;
-  ocs2::vector_t goalState;
-  std::unique_ptr<ocs2::double_integrator::DoubleIntegratorInterface> doubleIntegratorInterfacePtr;
-};
-
-int synchronousTracking() {
-  DoubleIntegrator di;
-  auto mpcPtr = di.getMpc(true);
-  ocs2::MPC_MRT_Interface mpcInterface(*mpcPtr);
+  ocs2::GaussNewtonDDP_MPC mpc(double_integrator_interface.mpcSettings(), double_integrator_interface.ddpSettings(),
+      double_integrator_interface.getRollout(), double_integrator_interface.getOptimalControlProblem(), double_integrator_interface.getInitializer());
+  mpc.getSolverPtr()->setReferenceManager(double_integrator_interface.getReferenceManagerPtr());
+  ocs2::MPC_MRT_Interface mpc_interface(mpc);
 
   ocs2::SystemObservation observation;
-  observation.time = di.initTime;
-  observation.state = di.initState;
+  observation.time = init_time;
+  observation.state = double_integrator_interface.getInitialState();
   observation.input.setZero(ocs2::double_integrator::INPUT_DIM);
-  mpcInterface.setCurrentObservation(observation);
+  mpc_interface.setCurrentObservation(observation);
 
   // run MPC for N iterations
-  auto time = observation.time;
-  while (time < di.finalTime+1e-8) {
-    // run MPC
-    mpcInterface.advanceMpc();
-    time += 1.0 / di.f_mpc;
+  const ocs2::scalar_t f_mpc = 10.0;
+  ocs2::scalar_t time = observation.time;
+  while (time < final_time+1e-8) {  // run MPC
+    mpc_interface.advanceMpc();
+    time += 1.0 / f_mpc;
 
-    if (mpcInterface.initialPolicyReceived()) {
+    if (mpc_interface.initialPolicyReceived()) {
       size_t mode;
-      ocs2::vector_t optimalState, optimalInput;
-
-      mpcInterface.updatePolicy();
-      mpcInterface.evaluatePolicy(time, ocs2::vector_t::Zero(ocs2::double_integrator::STATE_DIM), optimalState, optimalInput, mode);
-
+      ocs2::vector_t optimal_state, optimal_input;
+      mpc_interface.updatePolicy();
+      mpc_interface.evaluatePolicy(time, ocs2::vector_t::Zero(ocs2::double_integrator::STATE_DIM), optimal_state, optimal_input, mode);
+      LOG(INFO) << "time=" << time << ", optimal_state=" << optimal_state.transpose() << ", optimal_input=" << optimal_input.transpose();
       // use optimal state for the next observation:
       observation.time = time;
-      observation.state = optimalState;
+      observation.state = optimal_state;
       observation.input.setZero(ocs2::double_integrator::INPUT_DIM);
-      mpcInterface.setCurrentObservation(observation);
+      mpc_interface.setCurrentObservation(observation);
     }
   }
   LOG(INFO) << "end state=" << observation.state.transpose();
@@ -89,8 +60,8 @@ int synchronousTracking() {
 }
 
 int main() {
-  LOG(INFO) << "DoubleIntegratorDemo";
-  synchronousTracking();
-
+  LOG(INFO) << "DoubleIntegratorDemo start";
+  DoubleIntegratorIntegrationTestSynchronousTracking();
+  LOG(INFO) << "DoubleIntegratorDemo end";
   return 0;
 }
